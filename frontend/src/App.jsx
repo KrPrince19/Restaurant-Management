@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
 import CustomerDashboard from './pages/CustomerDashboard';
@@ -6,7 +6,15 @@ import AdminDashboard from './pages/AdminDashboard';
 import Navbar from './components/Navbar';
 
 function App() {
-  const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+  const [userInfo, setUserInfo] = useState(() => JSON.parse(localStorage.getItem('userInfo')));
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setUserInfo(JSON.parse(localStorage.getItem('userInfo')));
+    };
+    window.addEventListener('authChange', handleAuthChange);
+    return () => window.removeEventListener('authChange', handleAuthChange);
+  }, []);
 
   return (
     <Router>
