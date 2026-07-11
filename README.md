@@ -39,37 +39,44 @@ A full-stack web application for managing restaurant reservations. Built with th
    *The application will open on port 5173.*
 
 ## Assumptions Made
-1. **Single Restaurant Setup:** The system assumes all tables and reservations are for one specific restaurant.
-2. **Table Seeding:** Tables must be created by an Admin before customers can make reservations.
-3. **Roles on Registration:** For simplicity in this assignment, anyone registering through the standard login page is assigned the `customer` role. To test the `admin` role, you can change the role assignment in `authController.js` temporarily or edit the database directly. (Alternatively, the API supports sending `"role": "admin"` in the register payload if tested via Postman).
-4. **Time Slots:** Fixed hourly time slots (e.g., 18:00, 19:00) were used instead of arbitrary minute-level booking, to simplify conflict management and UI selection.
-
-## Extra Features Added (Beyond Requirements)
-The following features were added to enhance the user experience beyond the original assignment documentation:
-1. **Visual Table Availability Grid**: Customers can see a real-time visual grid of all tables and their available/booked time slots for the selected date.
-2. **Custom Booking Durations**: Users can manually specify the duration of their reservation in hours (up to 12 hours), and the system ensures there are no overlaps for the entire duration.
-3. **12-Hour Time Formatting**: All military times (e.g., 18:00) are automatically formatted to standard 12-hour AM/PM formats (e.g., 6:00 PM) for better readability.
-4. **Real-Time Auto-Polling**: The application seamlessly polls the database in the background every 5 seconds, ensuring that table availability and reservations update in near real-time without requiring manual page refreshes.
-5. **Seamless Auth State Management**: Logging in and out instantly updates the user interface without flashing or hard-reloading the browser.
+1. **Single Restaurant Context:** The application assumes all tables, reservations, and logic apply to a single restaurant location.
+2. **Table Seeding by Admins:** Tables do not exist by default. An admin must create tables with specific capacities before any customer can book a reservation.
+3. **Role Assignment on Registration:** For the purpose of this assignment, anyone registering through the standard login page is automatically assigned the `customer` role. To test `admin` capabilities, one can either modify the role assignment in `authController.js` temporarily, edit the user document in the database, or send `"role": "admin"` in the register payload via API testing tools like Postman.
+4. **Hourly Increments for Bookings:** Time slots are fixed on an hourly basis (e.g., 18:00, 19:00). Arbitrary minute-level bookings (like 18:15) are not supported to simplify conflict management and grid-based UI selection.
 
 ## Explanation of Reservation and Availability Logic
-When a customer attempts to book a table for a specific date, time, and number of guests:
-1. **Capacity Check:** The backend queries all tables where `capacity` >= `guests`.
-2. **Conflict Check:** It queries existing reservations for the selected `date` and `timeSlot`.
-3. **Filtering:** It filters the list of suitable tables, removing any tables that are already booked for that exact date and time.
-4. **Assignment:** If at least one table remains, the system automatically assigns the first available table to the reservation and saves it to the database. If no tables are available, a 409 Conflict error is returned gracefully to the frontend.
+When a customer interacts with the booking interface, the system performs several layers of logic to ensure valid bookings:
+1. **Frontend Availability Grid:** Based on the selected date, guest count, and desired duration, the frontend fetches all tables and all reservations for that date. 
+2. **Capacity Filtering:** The UI immediately filters out any tables where `capacity` is strictly less than the selected number of `guests`.
+3. **Conflict Checking (Frontend & Backend):** 
+   - Both the frontend and backend calculate if a requested booking overlaps with an existing reservation. 
+   - Since custom durations are supported (e.g., a 2-hour booking starting at 18:00 covers both 18:00 and 19:00 slots), the system translates all reservations into an array of blocked hourly slots.
+   - If *any* hour within the requested duration matches a blocked slot for the selected table, the booking is denied.
+4. **Specific Table Selection:** Unlike systems that auto-assign a table blindly, this system presents the available tables in a visual grid, allowing customers to manually choose a specific table based on the time slot they want. When they click "Available", the `tableId` is sent to the backend.
+5. **Backend Verification:** The backend re-verifies table capacity and re-checks for overlaps across the entire requested duration to prevent race conditions before saving the reservation to the database.
 
 ## Explanation of Role-Based Access (User vs Admin)
-- **JSON Web Tokens (JWT):** Upon login, a JWT is generated containing the user's `id` and `role`. This token is sent in the `Authorization` header for protected routes.
-- **Customer (User):** Can only view their own reservations and cancel their own reservations. The backend enforces this by matching `req.user.id` against the reservation's `user` field.
-- **Administrator (Admin):** Has access to special `/admin/*` routes. The `admin` middleware checks if `req.user.role === 'admin'`. Admins can view all reservations, filter them by date, manage (add/delete) tables, and cancel any user's reservation.
+The application enforces strict role-based access control (RBAC) utilizing JSON Web Tokens (JWT) and Express middleware.
+
+- **Authentication via JWT:** Upon successful login, a JWT is generated. This token contains the user's `id` and `role`. It is sent in the `Authorization` header (`Bearer <token>`) for all protected routes.
+- **Customer (User) Access:** 
+  - Regulated by the `protect` middleware, which verifies the JWT signature.
+  - Customers can only view their own reservations.
+  - When cancelling or editing a reservation, the backend verifies that `reservation.user.toString() === req.user.id`. A customer attempting to modify another user's reservation receives a 403 Forbidden error.
+- **Administrator (Admin) Access:** 
+  - Regulated by an additional `admin` middleware that strictly checks if `req.user.role === 'admin'`.
+  - Admins have access to exclusive routes (e.g., viewing all reservations across the system, filtering them by date, and managing tables).
+  - Admins bypass ownership checks. The cancellation logic explicitly allows an admin to cancel *any* user's reservation (`req.user.role === 'admin'`).
 
 ## Known Limitations
-1. **Hardcoded Time Slots**: The time slots (6 PM to 10 PM) are currently restricted to evening hours in the frontend.
+1. **Hardcoded Evening Time Slots:** The frontend grid currently hardcodes available hours from 18:00 (6:00 PM) to 22:00 (10:00 PM). It does not dynamically adapt to a restaurant's specific opening and closing hours.
+2. **No WebSockets for Real-Time State:** The application currently relies on a 5-second interval polling mechanism to keep the frontend availability grid updated. While functional, it is not a true real-time push mechanism like WebSockets.
+3. **No Email Notifications:** The system does not currently send automated confirmation or cancellation emails to users.
 
 ## Areas for Improvement with Additional Time
-- Implement **WebSockets (Socket.io)** to show real-time table availability on the frontend without refreshing.
-- Add **Email Notifications** (via Nodemailer/SendGrid) for reservation confirmations and cancellations.
-- Implement a visual **Interactive Floor Plan** for admins and customers to select specific tables visually.
-- Enhance the **Admin Dashboard** with analytics (e.g., busiest hours, most popular tables).
-- Add robust unit and integration testing using **Jest and Supertest**.
+- **Implement Socket.io:** Replace the frontend auto-polling with WebSockets to instantly push table availability changes to all connected clients without HTTP overhead.
+- **Dynamic Restaurant Settings:** Allow admins to configure opening hours, closing hours, and closed days, which the frontend would use to dynamically generate the time slot grid.
+- **Visual Interactive Floor Plan:** Upgrade the table grid to a visual, drag-and-drop floor plan where customers can select tables based on their physical location (e.g., "by the window").
+- **Email/SMS Integrations:** Integrate NodeMailer, SendGrid, or Twilio to dispatch reservation confirmations, reminders, and cancellation notices.
+- **Comprehensive Testing:** Add robust unit and integration testing using Jest and Supertest for backend routes, and React Testing Library for frontend components.
+- **Admin Analytics Dashboard:** Enhance the Admin view with charts showing peak booking hours, table utilization rates, and daily revenue estimates.
