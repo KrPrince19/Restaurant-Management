@@ -38,6 +38,15 @@ A full-stack web application for managing restaurant reservations. Built with th
    ```
    *The application will open on port 5173.*
 
+## How to Book a Table (For Customers)
+1. **Login/Register:** Access the application and register as a new user or login to your existing account.
+2. **Select Criteria:** On the Customer Dashboard, choose your desired **Date**, number of **Guests**, and **Duration (Hours)** using the input fields.
+3. **View Availability Grid:** The system will automatically check and display a grid of tables that can accommodate your party size.
+4. **Select a Time Slot:** In the grid, locate the row for the table you want and the column for the time you prefer.
+5. **Click to Book:** 
+   - If the time slot is free, you will see a blue **"Available"** button. **Click this button** to instantly secure your reservation for that table and time.
+   - If the slot is already taken or conflicts with your requested duration, it will show a greyed-out **"Booked"** button and cannot be clicked.
+
 ## Assumptions Made
 1. **Single Restaurant Context:** The application assumes all tables, reservations, and logic apply to a single restaurant location.
 2. **Table Seeding by Admins:** Tables do not exist by default. An admin must create tables with specific capacities before any customer can book a reservation.
